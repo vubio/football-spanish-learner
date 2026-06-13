@@ -4,6 +4,7 @@ from openai import OpenAI
 from io import BytesIO
 import json
 import requests
+import random
 from supabase import create_client, Client
 
 # 1. Setup Clients & DB
@@ -19,32 +20,24 @@ try:
 except Exception:
     db_connected = False
 
-# --- THE NEW APPROACH: FIFA Broadcast Codes ---
-def get_team_code(team_name):
-    name = team_name.strip().upper()
-    codes = {
-        "USA": "USA", "UNITED STATES": "USA", "BRAZIL": "BRA", "MEXICO": "MEX", 
-        "SOUTH KOREA": "KOR", "JAPAN": "JPN", "GERMANY": "GER", "SPAIN": "ESP", 
-        "FRANCE": "FRA", "ARGENTINA": "ARG", "ENGLAND": "ENG", "PORTUGAL": "POR", 
-        "ITALY": "ITA", "NETHERLANDS": "NED", "BELGIUM": "BEL", "URUGUAY": "URU", 
-        "CANADA": "CAN", "SAUDI ARABIA": "KSA", "QATAR": "QAT", "SWITZERLAND": "SUI", 
-        "MOROCCO": "MAR", "PARAGUAY": "PAR", "CZECH REPUBLIC": "CZE", 
-        "SOUTH AFRICA": "RSA", "HAITI": "HAI", "SCOTLAND": "SCO", 
-        "CURAÇAO": "CUW", "IVORY COAST": "CIV", "COTE D'IVOIRE": "CIV", 
-        "ECUADOR": "ECU", "AUSTRALIA": "AUS", "TURKEY": "TUR", "EGYPT": "EGY", 
-        "TUNISIA": "TUN", "SWEDEN": "SWE", "CAPE VERDE": "CPV", 
-        "BOSNIA-HERZEGOVINA": "BIH", "BOSNIA AND HERZEGOVINA": "BIH"
-    }
-    # Fallback to the first 3 letters if not in the dictionary
-    return codes.get(name, name[:3].upper())
-
 # Initialize session states
 if 'selected_event' not in st.session_state:
     st.session_state['selected_event'] = None
 if 'study_content' not in st.session_state:
     st.session_state['study_content'] = []
 
-# 2. Sidebar: Match Selection
+# Pool of topics for the Random Tab
+TOPIC_POOL = [
+    "The Transfer Market", "Locker Room Motivation", "Press Conferences", 
+    "Medical & Injuries", "Fan Culture & Chants", "Football History", 
+    "Extreme Weather Conditions", "Youth Academy", "Stadium Food & Drinks", 
+    "Goalkeeping Techniques", "Set Piece Tactics", "Bitter Rivalries", 
+    "Trophy Celebrations", "Referee Training", "Contract Negotiations"
+]
+if 'random_topics' not in st.session_state:
+    st.session_state['random_topics'] = random.sample(TOPIC_POOL, 3)
+
+# 2. Sidebar: Match Selection (Cleaned)
 with st.sidebar:
     st.header("🏆 World Cup 2026")
     
@@ -79,8 +72,8 @@ with st.sidebar:
                             home = match['strHomeTeam'].strip()
                             away = match['strAwayTeam'].strip()
                             
-                            # Clean, bulletproof broadcast text layout
-                            match_name = f"[{get_team_code(home)}] vs [{get_team_code(away)}] | {home} vs {away}"
+                            # Clean, text-only display
+                            match_name = f"{home} vs {away}"
                             
                             if st.button(match_name, key=match['idEvent'], use_container_width=True):
                                 st.session_state['selected_event'] = match
@@ -91,8 +84,8 @@ with st.sidebar:
 
 selected_event = st.session_state['selected_event']
 
-# 3. Main Area: Three Tabs
-tab1, tab2, tab3 = st.tabs(["🌎 General Spanish", "⚔️ Match Study", "📚 My Vocab Bank"])
+# 3. Main Area: Four Tabs
+tab1, tab2, tab3, tab4 = st.tabs(["🌎 General", "⚔️ Match", "🎲 Random", "📚 Vocab Bank"])
 
 # --- TAB 1: General Study ---
 with tab1:
@@ -133,6 +126,7 @@ with tab1:
                 st.session_state['study_content'] = json.loads(response.choices[0].message.content.replace("```json", "").replace("```", "").strip())
                 st.session_state['current_mode'] = general_mode
                 st.session_state['last_general_mode'] = general_mode
+                st.session_state['last_match_mode'] = None
             except Exception:
                 st.error("Error generating. Try again.")
 
@@ -175,12 +169,50 @@ with tab2:
                     st.session_state['study_content'] = json.loads(response.choices[0].message.content.replace("```json", "").replace("```", "").strip())
                     st.session_state['current_mode'] = match_mode
                     st.session_state['last_match_mode'] = match_mode
+                    st.session_state['last_general_mode'] = None
                 except Exception:
                     st.error("Error generating. Try again.")
     else:
         st.info("Select a match from the sidebar.")
 
-# --- RENDER GENERATED FLASHCARDS (Tabs 1 & 2) ---
+# --- TAB 3: Random Study ---
+with tab3:
+    st.subheader("🎲 Random Vocabulary Generator")
+    
+    col_r1, col_r2 = st.columns([5, 1])
+    with col_r1:
+        selected_random_topic = st.radio("Select a Scenario:", st.session_state['random_topics'], horizontal=True)
+    with col_r2:
+        if st.button("🎲 Roll New Scenarios", use_container_width=True):
+            st.session_state['random_topics'] = random.sample(TOPIC_POOL, 3)
+            st.rerun()
+            
+    col_style, col_diff = st.columns(2)
+    with col_style:
+        vocab_style = st.selectbox("Vocabulary Style:", ["Mixed", "Nouns", "Verbs", "Adjectives", "Idioms & Phrases"])
+    with col_diff:
+        difficulty = st.selectbox("Difficulty Level:", ["Easy (Beginner)", "Intermediate", "Hard (Advanced)"])
+        
+    if st.button("Generate Random Content", use_container_width=True):
+        with st.spinner("Crafting random cards..."):
+            random_prompt = f"Provide exactly 8 {difficulty} Spanish {vocab_style} related to football, focusing entirely on the scenario: '{selected_random_topic}'. Return JSON: [{{'topic': '{selected_random_topic} ({vocab_style})', 'es': '1 short {difficulty} sentence in Spanish', 'en': 'English translation'}}]."
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o", temperature=0.95,
+                    messages=[
+                        {"role": "system", "content": "You are a strict JSON generator. No markdown. Max 1 clear Spanish sentence."},
+                        {"role": "user", "content": random_prompt}
+                    ]
+                )
+                st.session_state['study_content'] = json.loads(response.choices[0].message.content.replace("```json", "").replace("```", "").strip())
+                st.session_state['current_mode'] = f"Random: {selected_random_topic}"
+                st.session_state['last_general_mode'] = None
+                st.session_state['last_match_mode'] = None
+            except Exception:
+                st.error("Error generating. Try again.")
+
+
+# --- RENDER GENERATED FLASHCARDS (Tabs 1, 2, & 3) ---
 if st.session_state['study_content'] and st.session_state.get('current_mode'):
     st.divider()
     st.header(f"Cards: {st.session_state['current_mode']}")
@@ -220,8 +252,7 @@ if st.session_state['study_content'] and st.session_state.get('current_mode'):
                         except Exception as e:
                             st.error("Failed to save.")
 
-# --- TAB 3: My Vocab Bank ---
-# Define the 8 Master Categories
+# --- TAB 4: My Vocab Bank ---
 BUCKETS = {
     "To Learn": "to_learn",
     "Easy": "easy",
@@ -233,7 +264,7 @@ BUCKETS = {
     "Archived": "archive"
 }
 
-with tab3:
+with tab4:
     if not db_connected:
         st.info("Your saved vocabulary will appear here once Supabase is connected.")
     else:
@@ -242,7 +273,6 @@ with tab3:
         search_col, filter_col = st.columns([3, 2])
         search_query = search_col.text_input("🔍 Search phrases...")
         
-        # Filter dropdown uses the new Master Categories
         selected_bucket_name = filter_col.selectbox("Filter by Bucket:", list(BUCKETS.keys()))
         bucket_val = BUCKETS[selected_bucket_name]
         
@@ -273,9 +303,7 @@ with tab3:
                     fp.seek(0) 
                     c2.audio(fp, format="audio/mp3")
                     
-                    # --- THE NEW APPROACH: Dropdown Reclassification ---
                     with c3:
-                        # Find the current friendly name for the dropdown index
                         current_status_name = list(BUCKETS.keys())[list(BUCKETS.values()).index(card['status'])]
                         
                         new_status_name = st.selectbox(
@@ -285,7 +313,6 @@ with tab3:
                             key=f"status_{card['id']}"
                         )
                         
-                        # If the user selects a new category, update the DB and refresh instantly
                         if new_status_name != current_status_name:
                             new_db_val = BUCKETS[new_status_name]
                             supabase.table("vocab").update({"status": new_db_val}).eq("id", card['id']).execute()

@@ -66,6 +66,13 @@ if selected_event:
                 st.session_state['phrases'] = json.loads(content)
             else:
                 st.markdown(content)
+                
+                # --- NEW: Add a single audio player for the long text blocks ---
+                tts = gTTS(text=content, lang='es')
+                fp = BytesIO()
+                tts.write_to_fp(fp)
+                fp.seek(0)
+                st.audio(fp, format="audio/mp3")
 
 # 4. Phrase/Audio Display
 if 'phrases' in st.session_state:

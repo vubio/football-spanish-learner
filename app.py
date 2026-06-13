@@ -52,7 +52,7 @@ if selected_event:
             prompts = {
                 "Player/Coach Names": f"List key players and coaches for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Write a description for each IN SPANISH, followed by an English translation.",
                 "Pre-Match Info": f"Provide pre-match team situations and talking points for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Write the response IN SPANISH, then provide an English summary.",
-                "In-Match Phrases": f"Provide 5 essential Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{'es': 'Spanish phrase', 'en': 'English meaning'}]."
+                "In-Match Phrases": f"Provide 5 essential Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'es': 'Spanish phrase', 'en': 'English meaning'}}]."
             }
             
             response = client.chat.completions.create(

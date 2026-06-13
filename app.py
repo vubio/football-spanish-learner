@@ -47,20 +47,29 @@ if 'last_match_mode' not in st.session_state: st.session_state['last_match_mode'
 
 # --- Dynamic AI Topic Generator ---
 def generate_dynamic_topics(domain):
-    prompt = f"Brainstorm 3 highly specific, completely random, and creative scenarios for practicing {domain} Spanish vocabulary. Return ONLY a JSON list of exactly 3 strings. Keep them under 5 words."
+    # This updated prompt forces a mix of common and rare scenarios
+    prompt = f"""
+    Brainstorm 3 diverse scenarios for practicing {domain} Spanish vocabulary. 
+    You MUST provide:
+    1. One VERY COMMON scenario (e.g., watching a match, talking about scores, simple travel).
+    2. One MODERATE scenario (e.g., tactical discussion, booking a hotel, restaurant orders).
+    3. One RARE or CREATIVE scenario (e.g., locker room drama, historical analysis, or unusual events).
+    
+    Return ONLY a JSON list of exactly 3 strings. Keep them short and clear.
+    """
     try:
         res = client.chat.completions.create(
             model="gpt-4o", 
-            temperature=1.0, # High temperature for maximum creativity
+            temperature=0.8, # Slightly lower temp makes it more reliable/consistent
             messages=[
-                {"role": "system", "content": "You are a strict JSON generator. Return only a JSON array of 3 strings."},
+                {"role": "system", "content": "You are a strict JSON generator. Return only a JSON array of strings."},
                 {"role": "user", "content": prompt}
             ]
         )
         return json.loads(res.choices[0].message.content.replace("```json", "").replace("```", "").strip())
     except Exception:
-        # Fallback just in case the AI glitches
-        return ["Unexpected Event", "Daily Routine", "Travel Problems"]
+        # Fallback to safe, balanced defaults
+        return ["Watching a football match", "Discussing match tactics", "Locker room speech"]
 
 # 2. Sidebar: Match Selection
 with st.sidebar:

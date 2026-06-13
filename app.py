@@ -121,12 +121,17 @@ if 'study_content' in st.session_state:
     
     for item in st.session_state['study_content']:
         with st.container(border=True):
-            st.subheader(item.get('topic', ''))
-            col1, col2 = st.columns([4, 2])
-            col1.write(f"**{item['es']}**")
-            col1.caption(f"Meaning: {item['en']}")
+            # Make the topic/focus area smaller using a caption
+            st.caption(f"{item.get('topic', '')}")
             
-            # Reverted to native Streamlit audio for absolute caching stability
+            col1, col2 = st.columns([4, 2])
+            
+            # Make the Spanish text prominent using a markdown header
+            col1.markdown(f"### {item['es']}")
+            
+            # Remove "Meaning:" and just show the English translation in italics
+            col1.write(f"*{item['en']}*")
+            
             try:
                 tts = gTTS(text=item['es'], lang='es')
                 fp = BytesIO()

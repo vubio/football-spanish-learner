@@ -9,7 +9,7 @@ from supabase import create_client, Client
 
 # 1. Setup Clients & DB
 st.set_page_config(page_title="Football Spanish Coach", layout="wide")
-st.title("⚽ Football Spanish Coach")
+st.title("⚽ Football & General Spanish Coach")
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 FOOTBALL_API_KEY = st.secrets["FOOTBALL_API_KEY"]
@@ -20,24 +20,48 @@ try:
 except Exception:
     db_connected = False
 
-# Initialize session states
-if 'selected_event' not in st.session_state:
-    st.session_state['selected_event'] = None
-if 'study_content' not in st.session_state:
-    st.session_state['study_content'] = []
+# --- FIFA Broadcast Codes ---
+def get_team_code(team_name):
+    name = team_name.strip().upper()
+    codes = {
+        "USA": "USA", "UNITED STATES": "USA", "BRAZIL": "BRA", "MEXICO": "MEX", 
+        "SOUTH KOREA": "KOR", "JAPAN": "JPN", "GERMANY": "GER", "SPAIN": "ESP", 
+        "FRANCE": "FRA", "ARGENTINA": "ARG", "ENGLAND": "ENG", "PORTUGAL": "POR", 
+        "ITALY": "ITA", "NETHERLANDS": "NED", "BELGIUM": "BEL", "URUGUAY": "URU", 
+        "CANADA": "CAN", "SAUDI ARABIA": "KSA", "QATAR": "QAT", "SWITZERLAND": "SUI", 
+        "MOROCCO": "MAR", "PARAGUAY": "PAR", "CZECH REPUBLIC": "CZE", 
+        "SOUTH AFRICA": "RSA", "HAITI": "HAI", "SCOTLAND": "SCO", 
+        "CURAÇAO": "CUW", "IVORY COAST": "CIV", "COTE D'IVOIRE": "CIV", 
+        "ECUADOR": "ECU", "AUSTRALIA": "AUS", "TURKEY": "TUR", "EGYPT": "EGY", 
+        "TUNISIA": "TUN", "SWEDEN": "SWE", "CAPE VERDE": "CPV", 
+        "BOSNIA-HERZEGOVINA": "BIH", "BOSNIA AND HERZEGOVINA": "BIH"
+    }
+    return codes.get(name, name[:3].upper())
 
-# Pool of topics for the Random Tab
-TOPIC_POOL = [
+# Initialize session states properly to avoid auto-generation bugs
+if 'selected_event' not in st.session_state: st.session_state['selected_event'] = None
+if 'study_content' not in st.session_state: st.session_state['study_content'] = []
+if 'last_general_mode' not in st.session_state: st.session_state['last_general_mode'] = "Positions"
+if 'last_match_mode' not in st.session_state: st.session_state['last_match_mode'] = "Player Names"
+
+# Topic Pools for Random Tab
+FOOTBALL_TOPICS = [
     "The Transfer Market", "Locker Room Motivation", "Press Conferences", 
     "Medical & Injuries", "Fan Culture & Chants", "Football History", 
     "Extreme Weather Conditions", "Youth Academy", "Stadium Food & Drinks", 
     "Goalkeeping Techniques", "Set Piece Tactics", "Bitter Rivalries", 
     "Trophy Celebrations", "Referee Training", "Contract Negotiations"
 ]
-if 'random_topics' not in st.session_state:
-    st.session_state['random_topics'] = random.sample(TOPIC_POOL, 3)
 
-# 2. Sidebar: Match Selection (Cleaned)
+GENERAL_TOPICS = [
+    "Traveling & Airports", "Ordering at a Restaurant", "Job Interview", 
+    "Medical Emergencies", "Shopping & Clothes", "Hobbies & Free Time", 
+    "Weather & Seasons", "Family & Relationships", "Renting an Apartment", 
+    "Public Transit", "Checking into a Hotel", "At the Supermarket", 
+    "Expressing Opinions", "Making Future Plans", "Dealing with Conflict"
+]
+
+# 2. Sidebar: Match Selection
 with st.sidebar:
     st.header("🏆 World Cup 2026")
     
@@ -58,8 +82,7 @@ with st.sidebar:
                 matches_by_date = {}
                 for e in events:
                     date = e['dateEvent']
-                    if date not in matches_by_date:
-                        matches_by_date[date] = []
+                    if date not in matches_by_date: matches_by_date[date] = []
                     matches_by_date[date].append(e)
                 
                 st.divider()
@@ -68,12 +91,9 @@ with st.sidebar:
                     for date in sorted(matches_by_date.keys()):
                         st.markdown(f"#### 📅 {date}")
                         for match in matches_by_date[date]:
-                            
                             home = match['strHomeTeam'].strip()
                             away = match['strAwayTeam'].strip()
-                            
-                            # Clean, text-only display
-                            match_name = f"{home} vs {away}"
+                            match_name = f"[{get_team_code(home)}] vs [{get_team_code(away)}] | {home} vs {away}"
                             
                             if st.button(match_name, key=match['idEvent'], use_container_width=True):
                                 st.session_state['selected_event'] = match
@@ -126,7 +146,6 @@ with tab1:
                 st.session_state['study_content'] = json.loads(response.choices[0].message.content.replace("```json", "").replace("```", "").strip())
                 st.session_state['current_mode'] = general_mode
                 st.session_state['last_general_mode'] = general_mode
-                st.session_state['last_match_mode'] = None
             except Exception:
                 st.error("Error generating. Try again.")
 
@@ -169,7 +188,6 @@ with tab2:
                     st.session_state['study_content'] = json.loads(response.choices[0].message.content.replace("```json", "").replace("```", "").strip())
                     st.session_state['current_mode'] = match_mode
                     st.session_state['last_match_mode'] = match_mode
-                    st.session_state['last_general_mode'] = None
                 except Exception:
                     st.error("Error generating. Try again.")
     else:
@@ -179,12 +197,24 @@ with tab2:
 with tab3:
     st.subheader("🎲 Random Vocabulary Generator")
     
-    col_r1, col_r2 = st.columns([5, 1])
+    col_domain, col_r1, col_r2 = st.columns([2, 3, 1])
+    
+    with col_domain:
+        domain = st.radio("Topic Domain:", ["Football", "General Spanish"], horizontal=True, key="random_domain")
+    
+    # Manage domain switching
+    if 'current_domain' not in st.session_state or st.session_state['current_domain'] != domain:
+        pool = FOOTBALL_TOPICS if domain == "Football" else GENERAL_TOPICS
+        st.session_state['random_topics'] = random.sample(pool, 3)
+        st.session_state['current_domain'] = domain
+    
     with col_r1:
         selected_random_topic = st.radio("Select a Scenario:", st.session_state['random_topics'], horizontal=True)
     with col_r2:
+        st.write("") # Spacing
         if st.button("🎲 Roll New Scenarios", use_container_width=True):
-            st.session_state['random_topics'] = random.sample(TOPIC_POOL, 3)
+            pool = FOOTBALL_TOPICS if domain == "Football" else GENERAL_TOPICS
+            st.session_state['random_topics'] = random.sample(pool, 3)
             st.rerun()
             
     col_style, col_diff = st.columns(2)
@@ -195,7 +225,11 @@ with tab3:
         
     if st.button("Generate Random Content", use_container_width=True):
         with st.spinner("Crafting random cards..."):
-            random_prompt = f"Provide exactly 8 {difficulty} Spanish {vocab_style} related to football, focusing entirely on the scenario: '{selected_random_topic}'. Return JSON: [{{'topic': '{selected_random_topic} ({vocab_style})', 'es': '1 short {difficulty} sentence in Spanish', 'en': 'English translation'}}]."
+            
+            # Change prompt context based on domain
+            context = f"related to football, focusing entirely on the scenario: '{selected_random_topic}'" if domain == "Football" else f"focusing entirely on the scenario: '{selected_random_topic}'"
+            random_prompt = f"Provide exactly 8 {difficulty} Spanish {vocab_style} {context}. Return JSON: [{{'topic': '{selected_random_topic} ({vocab_style})', 'es': '1 short {difficulty} sentence in Spanish', 'en': 'English translation'}}]."
+            
             try:
                 response = client.chat.completions.create(
                     model="gpt-4o", temperature=0.95,
@@ -206,8 +240,6 @@ with tab3:
                 )
                 st.session_state['study_content'] = json.loads(response.choices[0].message.content.replace("```json", "").replace("```", "").strip())
                 st.session_state['current_mode'] = f"Random: {selected_random_topic}"
-                st.session_state['last_general_mode'] = None
-                st.session_state['last_match_mode'] = None
             except Exception:
                 st.error("Error generating. Try again.")
 
@@ -270,11 +302,27 @@ with tab4:
     else:
         st.header("🗂️ Manage Your Vocabulary")
         
+        # --- NEW: Dynamic Bucket Counting ---
+        try:
+            status_res = supabase.table("vocab").select("status").execute()
+            counts = {b_val: 0 for b_val in BUCKETS.values()}
+            for row in status_res.data:
+                st_val = row.get("status")
+                if st_val in counts:
+                    counts[st_val] += 1
+                    
+            # Create friendly display names with counts
+            display_to_val = {f"{name} ({counts[val]})": val for name, val in BUCKETS.items()}
+            
+        except Exception:
+            # Fallback if query fails
+            display_to_val = {f"{name}": val for name, val in BUCKETS.items()}
+        
         search_col, filter_col = st.columns([3, 2])
         search_query = search_col.text_input("🔍 Search phrases...")
         
-        selected_bucket_name = filter_col.selectbox("Filter by Bucket:", list(BUCKETS.keys()))
-        bucket_val = BUCKETS[selected_bucket_name]
+        selected_display_name = filter_col.selectbox("Filter by Bucket:", list(display_to_val.keys()))
+        bucket_val = display_to_val[selected_display_name]
         
         st.divider()
         
@@ -304,6 +352,7 @@ with tab4:
                     c2.audio(fp, format="audio/mp3")
                     
                     with c3:
+                        # Raw bucket names for the Move To dropdown
                         current_status_name = list(BUCKETS.keys())[list(BUCKETS.values()).index(card['status'])]
                         
                         new_status_name = st.selectbox(

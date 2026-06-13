@@ -4,6 +4,8 @@ from openai import OpenAI
 from io import BytesIO
 import json
 import requests
+import random
+import base64
 
 # 1. Setup Clients
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -15,7 +17,6 @@ st.title("⚽ Football Spanish Coach")
 # 2. Sidebar: Match Selection
 with st.sidebar:
     st.header("📅 Select Match")
-    # Using 4429 (FIFA World Cup)
     url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsnextleague.php?id=4429"
     
     selected_event = None
@@ -45,51 +46,69 @@ if selected_event:
     )
     
     if st.button("Generate Study Content"):
-        with st.spinner("Breaking content into bite-sized audio..."):
+        with st.spinner("Crafting diverse Spanish phrases..."):
             
-            # --- NEW PROMPT STRUCTURE: Everything is strict JSON now ---
+            # --- NEW: Randomizers to ensure high diversity every click ---
+            tactics = random.choice(["overlapping runs", "high pressing", "offside traps", "counter-attacks", "set pieces"])
+            events = random.choice(["a controversial foul", "a missed penalty", "a stunning long-range goal", "a VAR review", "managerial frustration", "fans chanting"])
+            
+            # --- NEW: Lengthened output requirements and increased count to 7 ---
             prompts = {
-                "Player/Coach Names": f"Identify 4 key figures (players/coaches) for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Name & Team', 'es': 'Short description in Spanish', 'en': 'English translation'}}].",
-                "Pre-Match Info": f"Provide 4 key talking points or tactical situations for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Short Title', 'es': 'Spanish description', 'en': 'English translation'}}].",
-                "In-Match Phrases": f"Provide 5 essential Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Context', 'es': 'Spanish phrase', 'en': 'English meaning'}}]."
+                "Player/Coach Names": f"Identify 4 key figures (players/coaches) for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Provide highly detailed, varied descriptions highlighting their playstyle or recent form. Return ONLY JSON: [{{'topic': 'Name & Team', 'es': 'Detailed Spanish description (2-3 sentences)', 'en': 'English translation'}}].",
+                "Pre-Match Info": f"Provide 4 diverse, in-depth talking points for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}, focusing on {tactics} or team form. Return ONLY JSON: [{{'topic': 'Short Title', 'es': 'Detailed Spanish description (2-3 sentences)', 'en': 'English translation'}}].",
+                "In-Match Phrases": f"Provide 7 highly diverse, complex Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Include emotional reactions to {events}, tactical observations, and common fan slang. Return ONLY JSON: [{{'topic': 'Context', 'es': 'Longer, expressive Spanish phrase', 'en': 'English meaning'}}]."
             }
             
             try:
                 response = client.chat.completions.create(
                     model="gpt-4o", 
+                    temperature=0.9, # <-- Forces the AI to be less repetitive 
                     messages=[
-                        {"role": "system", "content": "You are a strict JSON generator. Do not include markdown formatting."},
+                        {"role": "system", "content": "You are a strict JSON generator. Never output markdown formatting. Use highly varied, natural, and expressive Spanish vocabulary."},
                         {"role": "user", "content": prompts[study_mode]}
                     ]
                 )
                 content = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                 
-                # Store the content and the mode title in session state
                 st.session_state['study_content'] = json.loads(content)
                 st.session_state['current_mode'] = study_mode
                 
             except Exception as e:
                 st.error(f"Error generating content: {e}. Try clicking generate again.")
 
-# 4. Universal Flashcard & Audio Display
+# 4. Universal Flashcard & Custom Audio Display
 if 'study_content' in st.session_state:
     st.divider()
     st.header(f"Study Cards: {st.session_state.get('current_mode', '')}")
     
-    # Render everything uniformly as bite-sized cards
-    for item in st.session_state['study_content']:
+    # Use enumerate to give each audio player a unique ID
+    for i, item in enumerate(st.session_state['study_content']):
         with st.container(border=True):
             st.subheader(item.get('topic', ''))
-            col1, col2 = st.columns([4, 1])
+            col1, col2 = st.columns([4, 2]) # Widened col2 slightly to fit the custom player
             col1.write(f"**{item['es']}**")
             col1.caption(f"Meaning: {item['en']}")
             
-            # Short, dedicated audio for ONLY the Spanish text
             try:
                 tts = gTTS(text=item['es'], lang='es')
                 fp = BytesIO()
                 tts.write_to_fp(fp)
                 fp.seek(0) 
-                col2.audio(fp, format="audio/mp3")
+                
+                # --- NEW: Convert audio to Base64 and inject HTML to force 0.85x speed ---
+                b64_audio = base64.b64encode(fp.read()).decode()
+                audio_id = f"audio_{i}"
+                
+                audio_html = f"""
+                    <audio id="{audio_id}" controls style="width: 100%;">
+                        <source src="data:audio/mp3;base64,{b64_audio}" type="audio/mp3">
+                    </audio>
+                    <script>
+                        document.getElementById("{audio_id}").playbackRate = 0.85;
+                    </script>
+                """
+                # Render the custom HTML instead of using st.audio
+                col2.markdown(audio_html, unsafe_allow_html=True)
+                
             except Exception as e:
                 col2.error("Audio error")

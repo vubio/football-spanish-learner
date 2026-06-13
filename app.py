@@ -21,19 +21,13 @@ try:
 except Exception:
     db_connected = False
 
-# Dictionary for fast, lightweight flags
-def get_flag(country):
-    flags = {
-        "Argentina": "🇦🇷", "Brazil": "🇧🇷", "France": "🇫🇷", "USA": "🇺🇸", 
-        "Netherlands": "🇳🇱", "Japan": "🇯🇵", "Mexico": "🇲🇽", "Spain": "🇪🇸",
-        "South Africa": "🇿🇦", "South Korea": "🇰🇷", "Czech Republic": "🇨🇿",
-        "Canada": "🇨🇦", "Paraguay": "🇵🇾", "Morocco": "🇲🇦", "Qatar": "🇶🇦",
-        "Switzerland": "🇨🇭", "Germany": "🇩🇪", "Ivory Coast": "🇨🇮", 
-        "Ecuador": "🇪🇨", "Australia": "🇦🇺", "Turkey": "🇹🇷", "Belgium": "🇧🇪",
-        "Egypt": "🇪🇬", "Saudi Arabia": "🇸🇦", "Uruguay": "🇺🇾", "Sweden": "🇸🇪",
-        "Tunisia": "🇹🇳", "England": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "Portugal": "🇵🇹", "Italy": "🇮🇹"
-    }
-    return flags.get(country, "🏳️")
+# Replace your old get_flag function with this:
+def get_team_badge(match, side='home'):
+    # TheSportsDB returns the image URL directly in the match object
+    badge_url = match.get('strHomeBadge') if side == 'home' else match.get('strAwayBadge')
+    if badge_url:
+        return f'<img src="{badge_url}" width="25">'
+    return "⚽" # Fallback if no badge found
 
 # Initialize session states
 if 'selected_event' not in st.session_state:
@@ -75,7 +69,7 @@ with st.sidebar:
                             home = match['strHomeTeam']
                             away = match['strAwayTeam']
                             # Add flags to the button text!
-                            match_name = f"{get_flag(home)} {home} vs {away} {get_flag(away)}"
+                            match_name = f"{get_team_badge(match, 'home')} {match['strHomeTeam']} vs {match['strAwayTeam']} {get_team_badge(match, 'away')}"
                             
                             if st.button(match_name, key=match['idEvent'], use_container_width=True):
                                 st.session_state['selected_event'] = match

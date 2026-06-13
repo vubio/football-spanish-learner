@@ -22,7 +22,7 @@ with st.sidebar:
     if response.status_code == 200:
         data = response.json()
         if data['events']:
-            for event in data['events'][:5]: # Show next 5 matches
+            for event in data['events']
                 st.write(f"**{event['strEvent']}**")
                 st.caption(f"Date: {event['dateEvent']} | Time: {event['strTime']}")
                 

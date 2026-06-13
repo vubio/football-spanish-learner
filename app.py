@@ -4,7 +4,6 @@ from openai import OpenAI
 from io import BytesIO
 import json
 import requests
-import random
 from supabase import create_client, Client
 
 # 1. Setup Clients & DB
@@ -14,27 +13,30 @@ st.title("⚽ Football Spanish Coach")
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 FOOTBALL_API_KEY = st.secrets["FOOTBALL_API_KEY"]
 
-# Initialize Supabase
 try:
     supabase: Client = create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
     db_connected = True
 except Exception:
     db_connected = False
 
-def get_team_badge(team_name):
-    # This maps the team name to a reliable flag emoji or icon
-    # Since specific team badges are tricky, let's use a mapping dictionary
-    # or just use the country flag from a standard list.
-    flag_map = {
-        "USA": "🇺🇸", "Brazil": "🇧🇷", "Mexico": "🇲🇽", "South Africa": "🇿🇦",
-        "South Korea": "🇰🇷", "Czech Republic": "🇨🇿", "Canada": "🇨🇦",
-        "Paraguay": "🇵🇾", "Morocco": "🇲🇦", "Qatar": "🇶🇦", "Switzerland": "🇨🇭",
-        "Haiti": "🇭🇹", "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "Germany": "🇩🇪", "Ivory Coast": "🇨🇮",
-        "Ecuador": "🇪🇨", "Australia": "🇦🇺", "Turkey": "🇹🇷", "Belgium": "🇧🇪",
-        "Egypt": "🇪🇬", "Saudi Arabia": "🇸🇦", "Uruguay": "🇺🇾", "Sweden": "🇸🇪",
-        "Tunisia": "🇹🇳", "Spain": "🇪🇸", "Portugal": "🇵🇹", "Italy": "🇮🇹"
+# --- THE NEW APPROACH: FIFA Broadcast Codes ---
+def get_team_code(team_name):
+    name = team_name.strip().upper()
+    codes = {
+        "USA": "USA", "UNITED STATES": "USA", "BRAZIL": "BRA", "MEXICO": "MEX", 
+        "SOUTH KOREA": "KOR", "JAPAN": "JPN", "GERMANY": "GER", "SPAIN": "ESP", 
+        "FRANCE": "FRA", "ARGENTINA": "ARG", "ENGLAND": "ENG", "PORTUGAL": "POR", 
+        "ITALY": "ITA", "NETHERLANDS": "NED", "BELGIUM": "BEL", "URUGUAY": "URU", 
+        "CANADA": "CAN", "SAUDI ARABIA": "KSA", "QATAR": "QAT", "SWITZERLAND": "SUI", 
+        "MOROCCO": "MAR", "PARAGUAY": "PAR", "CZECH REPUBLIC": "CZE", 
+        "SOUTH AFRICA": "RSA", "HAITI": "HAI", "SCOTLAND": "SCO", 
+        "CURAÇAO": "CUW", "IVORY COAST": "CIV", "COTE D'IVOIRE": "CIV", 
+        "ECUADOR": "ECU", "AUSTRALIA": "AUS", "TURKEY": "TUR", "EGYPT": "EGY", 
+        "TUNISIA": "TUN", "SWEDEN": "SWE", "CAPE VERDE": "CPV", 
+        "BOSNIA-HERZEGOVINA": "BIH", "BOSNIA AND HERZEGOVINA": "BIH"
     }
-    return flag_map.get(team_name, "⚽")
+    # Fallback to the first 3 letters if not in the dictionary
+    return codes.get(name, name[:3].upper())
 
 # Initialize session states
 if 'selected_event' not in st.session_state:
@@ -42,7 +44,7 @@ if 'selected_event' not in st.session_state:
 if 'study_content' not in st.session_state:
     st.session_state['study_content'] = []
 
-# 2. Sidebar: Match Selection with Flags
+# 2. Sidebar: Match Selection
 with st.sidebar:
     st.header("🏆 World Cup 2026")
     
@@ -73,24 +75,15 @@ with st.sidebar:
                     for date in sorted(matches_by_date.keys()):
                         st.markdown(f"#### 📅 {date}")
                         for match in matches_by_date[date]:
-                            # Try to find the team badges
-                            home_badge = match.get('strTeamBadge') # or 'strHomeBadge' depending on the API structure
-                            away_badge = match.get('strAwayBadge')
                             
-                            # Create the display string
-                            home_display = f"![img]({home_badge})" if home_badge else "⚽"
-                            away_display = f"![img]({away_badge})" if away_badge else "⚽"
+                            home = match['strHomeTeam'].strip()
+                            away = match['strAwayTeam'].strip()
                             
-
-                            # In your loop
-                            home = match['strHomeTeam']
-                            away = match['strAwayTeam']
-                            match_name = f"{get_team_badge(home)} {home} vs {away} {get_team_badge(away)}"
+                            # Clean, bulletproof broadcast text layout
+                            match_name = f"[{get_team_code(home)}] vs [{get_team_code(away)}] | {home} vs {away}"
                             
-                            # Use st.markdown for the button label to render the image
                             if st.button(match_name, key=match['idEvent'], use_container_width=True):
                                 st.session_state['selected_event'] = match
-
             else:
                 st.write("No matches found.")
     except Exception as e:
@@ -212,9 +205,8 @@ if st.session_state['study_content'] and st.session_state.get('current_mode'):
             except Exception:
                 col2.error("Audio error")
                 
-            # --- SUPABASE SAVE BUTTON ---
             with col3:
-                st.write("") # Alignment spacing
+                st.write("") 
                 if db_connected:
                     if st.button("💾 Save", key=f"save_{i}_{item['es'][:10]}"):
                         try:
@@ -229,23 +221,34 @@ if st.session_state['study_content'] and st.session_state.get('current_mode'):
                             st.error("Failed to save.")
 
 # --- TAB 3: My Vocab Bank ---
+# Define the 8 Master Categories
+BUCKETS = {
+    "To Learn": "to_learn",
+    "Easy": "easy",
+    "Hard": "hard",
+    "Easy-Learnt": "easy_learnt",
+    "Hard-Learnt": "hard_learnt",
+    "Impossible": "impossible",
+    "Impossible-Learnt": "impossible_learnt",
+    "Archived": "archive"
+}
+
 with tab3:
     if not db_connected:
         st.info("Your saved vocabulary will appear here once Supabase is connected.")
     else:
         st.header("🗂️ Manage Your Vocabulary")
         
-        # Search & Filters
         search_col, filter_col = st.columns([3, 2])
         search_query = search_col.text_input("🔍 Search phrases...")
-        bucket = filter_col.selectbox("Filter by Bucket:", ["To Learn (to_learn)", "Learnt (learnt)", "Archived (archive)"])
-        bucket_val = bucket.split("(")[1].replace(")", "")
+        
+        # Filter dropdown uses the new Master Categories
+        selected_bucket_name = filter_col.selectbox("Filter by Bucket:", list(BUCKETS.keys()))
+        bucket_val = BUCKETS[selected_bucket_name]
         
         st.divider()
         
-        # Fetch Data
         try:
-            # Query the database
             query = supabase.table("vocab").select("*").eq("status", bucket_val)
             if search_query:
                 query = query.ilike("es", f"%{search_query}%")
@@ -256,7 +259,6 @@ with tab3:
             if not saved_cards:
                 st.write("No vocabulary found in this bucket.")
             
-            # Display Saved Cards
             for card in saved_cards:
                 with st.container(border=True):
                     st.caption(card['topic'])
@@ -265,27 +267,29 @@ with tab3:
                     c1.markdown(f"#### :blue[{card['es']}]")
                     c1.write(f"*{card['en']}*")
                     
-                    # Audio
                     tts = gTTS(text=card['es'], lang='es')
                     fp = BytesIO()
                     tts.write_to_fp(fp)
                     fp.seek(0) 
                     c2.audio(fp, format="audio/mp3")
                     
-                    # Actions / Reclassification
+                    # --- THE NEW APPROACH: Dropdown Reclassification ---
                     with c3:
-                        if bucket_val != "to_learn":
-                            if st.button("🔄 Move to 'To Learn'", key=f"tl_{card['id']}"):
-                                supabase.table("vocab").update({"status": "to_learn"}).eq("id", card['id']).execute()
-                                st.rerun()
-                        if bucket_val != "learnt":
-                            if st.button("✅ Mark Learnt", key=f"ml_{card['id']}"):
-                                supabase.table("vocab").update({"status": "learnt"}).eq("id", card['id']).execute()
-                                st.rerun()
-                        if bucket_val != "archive":
-                            if st.button("📦 Archive", key=f"ar_{card['id']}"):
-                                supabase.table("vocab").update({"status": "archive"}).eq("id", card['id']).execute()
-                                st.rerun()
+                        # Find the current friendly name for the dropdown index
+                        current_status_name = list(BUCKETS.keys())[list(BUCKETS.values()).index(card['status'])]
+                        
+                        new_status_name = st.selectbox(
+                            "Move to:",
+                            list(BUCKETS.keys()),
+                            index=list(BUCKETS.keys()).index(current_status_name),
+                            key=f"status_{card['id']}"
+                        )
+                        
+                        # If the user selects a new category, update the DB and refresh instantly
+                        if new_status_name != current_status_name:
+                            new_db_val = BUCKETS[new_status_name]
+                            supabase.table("vocab").update({"status": new_db_val}).eq("id", card['id']).execute()
+                            st.rerun()
                                 
         except Exception as e:
             st.error(f"Database error: {e}")

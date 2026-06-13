@@ -5,6 +5,7 @@ from io import BytesIO
 import json
 import requests
 import random
+import datetime # <-- Add this to the top of your file with the other imports
 
 # 1. Setup Clients
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -15,8 +16,13 @@ st.title("⚽ Football Spanish Coach")
 
 # 2. Sidebar: Match Selection
 with st.sidebar:
-    st.header("📅 Live Matches")
-    url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsnextleague.php?id=4429"
+    st.header("📅 Today's Live Matches")
+    
+    # Get today's date dynamically
+    today = datetime.date.today().strftime("%Y-%m-%d")
+    
+    # Use the eventsday endpoint to pull everything happening today for Soccer
+    url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsday.php?d={today}&s=Soccer"
     
     selected_event = None
     try:
@@ -25,11 +31,11 @@ with st.sidebar:
             data = response.json()
             if data and data.get('events'):
                 events = data['events']
-                event_options = {f"{e['strHomeTeam']} vs {e['strAwayTeam']} ({e['dateEvent']})": e for e in events}
+                event_options = {f"{e['strEvent']} ({e['dateEvent']})": e for e in events}
                 selected_name = st.selectbox("Select a match (for Match-Specific Study):", options=list(event_options.keys()))
                 selected_event = event_options[selected_name]
             else:
-                st.write("No upcoming matches found.")
+                st.write("No matches scheduled for today.")
         else:
             st.error("Could not fetch match data.")
     except Exception as e:

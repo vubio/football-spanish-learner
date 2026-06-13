@@ -13,9 +13,15 @@ FOOTBALL_API_KEY = st.secrets["FOOTBALL_API_KEY"]
 st.set_page_config(page_title="Football Spanish Coach", layout="wide")
 st.title("⚽ Football Spanish Coach")
 
-# Initialize session state for the selected match
+# Initialize session states
 if 'selected_event' not in st.session_state:
     st.session_state['selected_event'] = None
+if 'last_general_mode' not in st.session_state:
+    st.session_state['last_general_mode'] = None
+if 'last_match_mode' not in st.session_state:
+    st.session_state['last_match_mode'] = None
+if 'study_content' not in st.session_state:
+    st.session_state['study_content'] = []
 
 # 2. Sidebar: Match Selection (Scrollable & Grouped)
 with st.sidebar:
@@ -30,13 +36,11 @@ with st.sidebar:
             if data and data.get('events'):
                 events = data['events']
                 
-                # Active Selection Display
                 if st.session_state['selected_event']:
                     st.success(f"**Active:** {st.session_state['selected_event']['strEvent']}")
                 else:
                     st.info("Select a match below to unlock match-specific study.")
                 
-                # Group matches by date
                 matches_by_date = {}
                 for e in events:
                     date = e['dateEvent']
@@ -46,25 +50,20 @@ with st.sidebar:
                 
                 st.divider()
                 
-                # Create a scrollable container of 600 pixels height
                 with st.container(height=600, border=False):
                     for date in sorted(matches_by_date.keys()):
                         st.markdown(f"#### 📅 {date}")
                         for match in matches_by_date[date]:
                             match_name = f"{match['strHomeTeam']} vs {match['strAwayTeam']}"
-                            
-                            # Use buttons for each match that stretch full width
                             if st.button(match_name, key=match['idEvent'], use_container_width=True):
                                 st.session_state['selected_event'] = match
-                                
             else:
-                st.write("No World Cup matches found for this season in the database.")
+                st.write("No World Cup matches found for this season.")
         else:
             st.error("Could not fetch match data.")
     except Exception as e:
         st.error(f"API Error: {e}")
 
-# Assign the session state to the variable used by the rest of the app
 selected_event = st.session_state['selected_event']
 
 # 3. Main Area: Tabs for General vs Match-Specific
@@ -73,20 +72,39 @@ tab1, tab2 = st.tabs(["🌎 General Football Spanish", "⚔️ Match-Specific St
 # --- TAB 1: General Study ---
 with tab1:
     st.subheader("Everyday Football Vocabulary")
-    general_mode = st.radio(
-        "General Focus Area:",
-        ["Positions & Roles", "Common Actions (Verbs)", "Stadium & Fans", "Basic Rules"],
-        horizontal=True,
-        key="gen_radio"
-    )
     
-    if st.button("Generate General Content"):
+    col1, col2 = st.columns([5, 1])
+    with col1:
+        general_mode = st.radio(
+            "General Focus Area:",
+            [
+                "Positions & Roles", 
+                "Common Actions", 
+                "Stadium & Fans", 
+                "Basic Rules",
+                "Numbers & Stats",
+                "Match Progression",
+                "Emotions & Reactions"
+            ],
+            horizontal=True,
+            key="gen_radio"
+        )
+    with col2:
+        # Subtle shuffle button just in case they want fresh cards for the same topic
+        st.write("") # Spacing
+        shuffle_gen = st.button("🔄 Shuffle", key="shuffle_gen", use_container_width=True)
+    
+    # Auto-generate if the radio selection changed OR if shuffle was clicked
+    if general_mode != st.session_state['last_general_mode'] or shuffle_gen:
         with st.spinner("Crafting general study cards..."):
             gen_prompts = {
-                "Positions & Roles": "Provide exactly 8 football positions or roles (e.g., goalkeeper, striker, winger). For each, provide the term and a 1-sentence definition in Spanish. Return ONLY JSON: [{'topic': 'Position', 'es': '1 short sentence in Spanish', 'en': 'English translation'}].",
-                "Common Actions (Verbs)": "Provide exactly 8 common football verbs (e.g., to shoot, to tackle, to pass) used in context. Return ONLY JSON: [{'topic': 'Verb', 'es': '1 short example sentence in Spanish', 'en': 'English translation'}].",
+                "Positions & Roles": "Provide exactly 8 football positions or roles. Return ONLY JSON: [{'topic': 'Position', 'es': '1 short sentence in Spanish', 'en': 'English translation'}].",
+                "Common Actions": "Provide exactly 8 common football verbs used in context. Return ONLY JSON: [{'topic': 'Verb', 'es': '1 short example sentence in Spanish', 'en': 'English translation'}].",
                 "Stadium & Fans": "Provide exactly 8 common nouns or phrases related to the stadium, the pitch, or the crowd. Return ONLY JSON: [{'topic': 'Stadium Vocab', 'es': '1 short sentence in Spanish', 'en': 'English translation'}].",
-                "Basic Rules": "Provide exactly 8 basic football rules, calls, or match phases (e.g., kick-off, halftime, throw-in). Return ONLY JSON: [{'topic': 'Rule/Phase', 'es': '1 short sentence in Spanish', 'en': 'English translation'}]."
+                "Basic Rules": "Provide exactly 8 basic football rules, calls, or match phases. Return ONLY JSON: [{'topic': 'Rule/Phase', 'es': '1 short sentence in Spanish', 'en': 'English translation'}].",
+                "Numbers & Stats": "Provide exactly 10 Spanish phrases involving football numbers and statistics (e.g., shirt numbers, formations like 4-3-3, match results like 2-1, 60% possession ratio, number of shots, attendance figures). Return ONLY JSON: [{'topic': 'Numbers & Stats', 'es': '1 short sentence in Spanish', 'en': 'English translation'}].",
+                "Match Progression": "Provide exactly 8 Spanish phrases about match stages and tournament progression (e.g., first half, second half, extra time, halftime break, early/late goals, group stage, knockout, advancing, eliminated, 3rd place). Return ONLY JSON: [{'topic': 'Match Stage', 'es': '1 short sentence in Spanish', 'en': 'English translation'}].",
+                "Emotions & Reactions": "Provide exactly 8 Spanish phrases describing human interactions and emotions in football (e.g., player frustration, fan joy, global audience excitement, crying, celebrating). Return ONLY JSON: [{'topic': 'Emotion/Reaction', 'es': '1 short sentence in Spanish', 'en': 'English translation'}]."
             }
             
             try:
@@ -101,25 +119,33 @@ with tab1:
                 content = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                 st.session_state['study_content'] = json.loads(content)
                 st.session_state['current_mode'] = general_mode
+                
+                # Update trackers
+                st.session_state['last_general_mode'] = general_mode
+                st.session_state['last_match_mode'] = None 
             except Exception as e:
-                st.error("Parsing error. Please click Generate again.")
+                st.error("Parsing error. Please click Shuffle again.")
 
 # --- TAB 2: Match-Specific Study ---
 with tab2:
     if selected_event:
         st.subheader(f"Studying: {selected_event['strEvent']}")
-        study_mode = st.radio(
-            "Match Focus Area:",
-            ["Player/Coach Names", "Pre-Match Info", "In-Match Phrases", "Tactical Analysis", "Fan Slang", "Referee & VAR"],
-            horizontal=True,
-            key="match_radio"
-        )
         
-        if st.button("Generate Match Content"):
+        col1_m, col2_m = st.columns([5, 1])
+        with col1_m:
+            match_mode = st.radio(
+                "Match Focus Area:",
+                ["Player/Coach Names", "Pre-Match Info", "In-Match Phrases", "Tactical Analysis", "Fan Slang", "Referee & VAR"],
+                horizontal=True,
+                key="match_radio"
+            )
+        with col2_m:
+            st.write("") # Spacing
+            shuffle_match = st.button("🔄 Shuffle", key="shuffle_match", use_container_width=True)
+        
+        # Auto-generate if the radio selection changed OR if shuffle was clicked
+        if match_mode != st.session_state['last_match_mode'] or shuffle_match:
             with st.spinner("Crafting match-specific cards..."):
-                tactics = random.choice(["gegenpressing", "counter-attacking", "low-block defending", "possession-based build-up"])
-                events = random.choice(["referee controversy", "corner kick routines", "yellow card pressure", "stoppage time drama"])
-                
                 match_prompts = {
                     "Player/Coach Names": f"Identify exactly 8 key players or managers for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. You MUST start the Spanish sentence with the person's exact name (e.g., 'Neymar es...'). Return ONLY JSON: [{{'topic': 'Name (Team)', 'es': '1 short sentence in Spanish starting with their name', 'en': 'English translation'}}].",
                     "Pre-Match Info": f"Provide exactly 8 short tactical points for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Fact', 'es': '1 short sentence in Spanish', 'en': 'English translation'}}].",
@@ -135,19 +161,23 @@ with tab2:
                         temperature=0.95,
                         messages=[
                             {"role": "system", "content": "You are a strict JSON generator. Do not include markdown backticks. Keep the Spanish text extremely concise (maximum 1 clear sentence)."},
-                            {"role": "user", "content": match_prompts[study_mode]}
+                            {"role": "user", "content": match_prompts[match_mode]}
                         ]
                     )
                     content = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                     st.session_state['study_content'] = json.loads(content)
-                    st.session_state['current_mode'] = study_mode
+                    st.session_state['current_mode'] = match_mode
+                    
+                    # Update trackers
+                    st.session_state['last_match_mode'] = match_mode
+                    st.session_state['last_general_mode'] = None 
                 except Exception as e:
-                    st.error("Parsing error. Please click Generate again.")
+                    st.error("Parsing error. Please click Shuffle again.")
     else:
         st.info("Please select a match from the sidebar to use match-specific features.")
 
 # 4. Universal Flashcard & Native Audio Display
-if 'study_content' in st.session_state:
+if 'study_content' in st.session_state and st.session_state['study_content']:
     st.divider()
     st.header(f"Study Cards: {st.session_state.get('current_mode', '')}")
     

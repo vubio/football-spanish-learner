@@ -92,9 +92,12 @@ with st.sidebar:
                     for date in sorted(matches_by_date.keys()):
                         st.markdown(f"#### 📅 {date}")
                         for match in matches_by_date[date]:
+                            # Just pull the raw team names
                             home = match['strHomeTeam'].strip()
                             away = match['strAwayTeam'].strip()
-                            match_name = f"[{get_team_code(home)}] vs [{get_team_code(away)}] | {home} vs {away}"
+                            
+                            # Clean, text-only display without the broadcast codes
+                            match_name = f"{home} vs {away}"
                             
                             if st.button(match_name, key=match['idEvent'], use_container_width=True):
                                 st.session_state['selected_event'] = match

@@ -15,8 +15,8 @@ st.title("⚽ Football Spanish Coach")
 # --- SIDEBAR: Live Scores & Schedule ---
 with st.sidebar:
     st.header("📅 Live Match Center")
-    # Example: Fetching English Premier League (League ID 4328)
-    url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsnextleague.php?id=4328"
+    # Example: Fetching English Premier League (League ID 4429)
+    url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsnextleague.php?id=4429"
     response = requests.get(url)
     
     if response.status_code == 200:

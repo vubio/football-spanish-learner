@@ -43,10 +43,11 @@ if selected_event:
     if st.button("Generate Study Content"):
         with st.spinner("Generating content..."):
             # Define prompts based on selection
+            # --- Update this section in your app.py ---
             prompts = {
-                "Player/Coach Names": f"List key players and coaches for {selected_event['strHomeTeam']} and {selected_event['strAwayTeam']}. Explain their roles.",
-                "Pre-Match Info": f"Provide background info, team situations, and common media talking points for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}.",
-                "In-Match Phrases": f"Provide 5 essential Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']} (e.g., scoring, corners). Return as JSON list of {{'es', 'en'}}."
+                "Player/Coach Names": f"Provide the names of key players and coaches for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. For each person, write a brief, simple description in Spanish, followed by the English translation.",
+                "Pre-Match Info": f"Provide background info, team situations, and common media talking points for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Write the response entirely in Spanish for a language learner, then provide an English summary at the end.",
+                "In-Match Phrases": f"Provide 5 essential Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']} (e.g., scoring, corners). Return ONLY a JSON list of objects with 'es' (the Spanish phrase) and 'en' (the English translation).",
             }
             
             prompt = prompts[study_mode]

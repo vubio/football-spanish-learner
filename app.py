@@ -3,41 +3,60 @@ from gtts import gTTS
 from openai import OpenAI
 from io import BytesIO
 import json
+import requests
 
+# Initialize Clients
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+FOOTBALL_API_KEY = st.secrets["FOOTBALL_API_KEY"]
 
-st.set_page_config(page_title="Football Spanish Coach", page_icon="⚽")
+st.set_page_config(page_title="Football Spanish Coach", layout="wide")
 st.title("⚽ Football Spanish Coach")
 
-# Sidebar for controls
+# --- SIDEBAR: Live Scores & Schedule ---
 with st.sidebar:
-    st.header("Settings")
-    scenario = st.selectbox("Match Scenario", ["General", "Goal Scored", "Referee Decision", "Player Action"])
-    level = st.radio("Difficulty", ["Basic", "Advanced"])
+    st.header("📅 Live Match Center")
+    # Example: Fetching English Premier League (League ID 4328)
+    url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsnextleague.php?id=4328"
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if data['events']:
+            for event in data['events'][:5]: # Show next 5 matches
+                st.write(f"**{event['strEvent']}**")
+                st.caption(f"Date: {event['dateEvent']} | Time: {event['strTime']}")
+                
+                # Context button
+                if st.button(f"Get Context for {event['strHomeTeam']}", key=event['idEvent']):
+                    with st.spinner("Analyzing match context..."):
+                        prompt = f"Give me 3 short, interesting facts or linguistic notes for a football match between {event['strHomeTeam']} and {event['strAwayTeam']} to help me learn Spanish."
+                        context = client.chat.completions.create(
+                            model="gpt-4o", messages=[{"role": "user", "content": prompt}]
+                        ).choices[0].message.content
+                        st.info(context)
+        else:
+            st.write("No upcoming matches found.")
+    else:
+        st.error("Could not fetch match data.")
+
+# --- MAIN AREA: Language Learning ---
+st.header("Spanish Phrase Generator")
+scenario = st.selectbox("Match Scenario", ["General", "Goal Scored", "Referee Decision", "Player Action"])
+level = st.radio("Difficulty", ["Basic", "Advanced"], horizontal=True)
 
 if st.button("Generate Phrases"):
-    prompt = f"Give me 5 {level} Spanish sentences related to '{scenario}' in a football match. Return ONLY JSON format: [{{'es': '...', 'en': '...'}}]"
+    prompt = f"Give me 5 {level} Spanish sentences related to '{scenario}' in a football match. Return ONLY a JSON list of objects with 'es' and 'en' keys."
     
-    response = client.chat.completions.create(
-        model="gpt-4o", 
-        messages=[
-            {"role": "system", "content": "You are a strict JSON generator. Return ONLY a JSON list of objects with 'es' and 'en' keys. Do not include any markdown formatting like ```json or conversational text."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    
-    content = response.choices[0].message.content.strip()
-    
-    # Handle potential markdown backticks that the AI might sneak in
-    if content.startswith("```"):
-        content = content.replace("```json", "").replace("```", "").strip()
-        
     try:
+        response = client.chat.completions.create(
+            model="gpt-4o", 
+            messages=[{"role": "system", "content": "You are a strict JSON generator."}, {"role": "user", "content": prompt}]
+        )
+        content = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
         new_phrases = json.loads(content)
         st.session_state.setdefault('phrases', []).extend(new_phrases)
-    except json.JSONDecodeError:
-        st.error("The AI returned an invalid format. Please try again.")
-        st.write("Raw response:", content)
+    except Exception as e:
+        st.error(f"Error generating phrases: {e}")
 
 # Display phrases
 if 'phrases' in st.session_state:
@@ -47,6 +66,7 @@ if 'phrases' in st.session_state:
             col1.write(f"**{item['es']}**")
             col1.caption(f"Meaning: {item['en']}")
             
+            # Simple Text-to-Speech
             tts = gTTS(text=item['es'], lang='es')
             fp = BytesIO()
             tts.write_to_fp(fp)

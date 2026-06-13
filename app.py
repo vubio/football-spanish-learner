@@ -44,22 +44,22 @@ if 'study_content' not in st.session_state: st.session_state['study_content'] = 
 if 'last_general_mode' not in st.session_state: st.session_state['last_general_mode'] = "Positions"
 if 'last_match_mode' not in st.session_state: st.session_state['last_match_mode'] = "Player Names"
 
-# Topic Pools for Random Tab
-FOOTBALL_TOPICS = [
-    "The Transfer Market", "Locker Room Motivation", "Press Conferences", 
-    "Medical & Injuries", "Fan Culture & Chants", "Football History", 
-    "Extreme Weather Conditions", "Youth Academy", "Stadium Food & Drinks", 
-    "Goalkeeping Techniques", "Set Piece Tactics", "Bitter Rivalries", 
-    "Trophy Celebrations", "Referee Training", "Contract Negotiations"
-]
-
-GENERAL_TOPICS = [
-    "Traveling & Airports", "Ordering at a Restaurant", "Job Interview", 
-    "Medical Emergencies", "Shopping & Clothes", "Hobbies & Free Time", 
-    "Weather & Seasons", "Family & Relationships", "Renting an Apartment", 
-    "Public Transit", "Checking into a Hotel", "At the Supermarket", 
-    "Expressing Opinions", "Making Future Plans", "Dealing with Conflict"
-]
+# --- Dynamic AI Topic Generator ---
+def generate_dynamic_topics(domain):
+    prompt = f"Brainstorm 3 highly specific, completely random, and creative scenarios for practicing {domain} Spanish vocabulary. Return ONLY a JSON list of exactly 3 strings. Keep them under 5 words."
+    try:
+        res = client.chat.completions.create(
+            model="gpt-4o", 
+            temperature=1.0, # High temperature for maximum creativity
+            messages=[
+                {"role": "system", "content": "You are a strict JSON generator. Return only a JSON array of 3 strings."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return json.loads(res.choices[0].message.content.replace("```json", "").replace("```", "").strip())
+    except Exception:
+        # Fallback just in case the AI glitches
+        return ["Unexpected Event", "Daily Routine", "Travel Problems"]
 
 # 2. Sidebar: Match Selection
 with st.sidebar:
@@ -202,19 +202,21 @@ with tab3:
     with col_domain:
         domain = st.radio("Topic Domain:", ["Football", "General Spanish"], horizontal=True, key="random_domain")
     
-    # Manage domain switching
+    # Manage domain switching: fetch AI topics on first load or when switching domains
     if 'current_domain' not in st.session_state or st.session_state['current_domain'] != domain:
-        pool = FOOTBALL_TOPICS if domain == "Football" else GENERAL_TOPICS
-        st.session_state['random_topics'] = random.sample(pool, 3)
+        with st.spinner(f"Brainstorming {domain} scenarios..."):
+            st.session_state['random_topics'] = generate_dynamic_topics(domain)
         st.session_state['current_domain'] = domain
     
     with col_r1:
         selected_random_topic = st.radio("Select a Scenario:", st.session_state['random_topics'], horizontal=True)
+        
     with col_r2:
         st.write("") # Spacing
+        # The wired button!
         if st.button("🎲 Roll New Scenarios", use_container_width=True):
-            pool = FOOTBALL_TOPICS if domain == "Football" else GENERAL_TOPICS
-            st.session_state['random_topics'] = random.sample(pool, 3)
+            with st.spinner("Brainstorming new topics..."):
+                st.session_state['random_topics'] = generate_dynamic_topics(domain)
             st.rerun()
             
     col_style, col_diff = st.columns(2)
@@ -226,7 +228,6 @@ with tab3:
     if st.button("Generate Random Content", use_container_width=True):
         with st.spinner("Crafting random cards..."):
             
-            # Change prompt context based on domain
             context = f"related to football, focusing entirely on the scenario: '{selected_random_topic}'" if domain == "Football" else f"focusing entirely on the scenario: '{selected_random_topic}'"
             random_prompt = f"Provide exactly 8 {difficulty} Spanish {vocab_style} {context}. Return JSON: [{{'topic': '{selected_random_topic} ({vocab_style})', 'es': '1 short {difficulty} sentence in Spanish', 'en': 'English translation'}}]."
             

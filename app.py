@@ -305,49 +305,58 @@ with tab4:
     else:
         st.header("🗂️ Manage Your Vocabulary")
         
-        # --- NEW: Dynamic Bucket Counting ---
+        # 1. Fetch all data for filtering
         try:
-            status_res = supabase.table("vocab").select("status").execute()
-            counts = {b_val: 0 for b_val in BUCKETS.values()}
-            for row in status_res.data:
-                st_val = row.get("status")
-                if st_val in counts:
-                    counts[st_val] += 1
-                    
-            # Create friendly display names with counts
-            display_to_val = {f"{name} ({counts[val]})": val for name, val in BUCKETS.items()}
+            all_data = supabase.table("vocab").select("*").execute().data
             
-        except Exception:
-            # Fallback if query fails
-            display_to_val = {f"{name}": val for name, val in BUCKETS.items()}
-        
-        search_col, filter_col = st.columns([3, 2])
-        search_query = search_col.text_input("🔍 Search phrases...")
-        
-        selected_display_name = filter_col.selectbox("Filter by Bucket:", list(display_to_val.keys()))
-        bucket_val = display_to_val[selected_display_name]
-        
-        st.divider()
-        
-        try:
+            # Count buckets and dates dynamically
+            status_counts = {val: 0 for val in BUCKETS.values()}
+            date_counts = {}
+            for row in all_data:
+                # Count status
+                s = row.get("status")
+                if s in status_counts: status_counts[s] += 1
+                # Count dates
+                d = row.get("created_at", "2026-06-13")
+                date_counts[d] = date_counts.get(d, 0) + 1
+            
+            # Create friendly dropdown labels
+            display_to_val = {f"{name} ({status_counts.get(val, 0)})": val for name, val in BUCKETS.items()}
+            date_options = {f"{d} ({count})": d for d, count in date_counts.items()}
+            date_options["All Dates"] = "All"
+            
+            # 2. UI Filters
+            col_search, col_bucket, col_date = st.columns([3, 2, 2])
+            search_query = col_search.text_input("🔍 Search...")
+            selected_bucket_display = col_bucket.selectbox("Bucket:", list(display_to_val.keys()))
+            selected_date_display = col_date.selectbox("Date:", list(date_options.keys()))
+            
+            st.divider()
+            
+            # 3. Apply Filters
+            bucket_val = display_to_val[selected_bucket_display]
+            target_date = date_options[selected_date_display]
+            
             query = supabase.table("vocab").select("*").eq("status", bucket_val)
+            if target_date != "All":
+                query = query.eq("created_at", target_date)
             if search_query:
                 query = query.ilike("es", f"%{search_query}%")
-            
-            response = query.execute()
-            saved_cards = response.data
+                
+            saved_cards = query.execute().data
             
             if not saved_cards:
-                st.write("No vocabulary found in this bucket.")
+                st.write("No vocabulary found.")
             
             for card in saved_cards:
                 with st.container(border=True):
-                    st.caption(card['topic'])
+                    st.caption(f"{card['topic']} | Added: {card.get('created_at', 'N/A')}")
                     c1, c2, c3 = st.columns([5, 2, 2])
                     
                     c1.markdown(f"#### :blue[{card['es']}]")
                     c1.write(f"*{card['en']}*")
                     
+                    # Audio
                     tts = gTTS(text=card['es'], lang='es')
                     fp = BytesIO()
                     tts.write_to_fp(fp)
@@ -355,20 +364,15 @@ with tab4:
                     c2.audio(fp, format="audio/mp3")
                     
                     with c3:
-                        # Raw bucket names for the Move To dropdown
                         current_status_name = list(BUCKETS.keys())[list(BUCKETS.values()).index(card['status'])]
-                        
                         new_status_name = st.selectbox(
-                            "Move to:",
-                            list(BUCKETS.keys()),
+                            "Move to:", list(BUCKETS.keys()),
                             index=list(BUCKETS.keys()).index(current_status_name),
                             key=f"status_{card['id']}"
                         )
-                        
                         if new_status_name != current_status_name:
-                            new_db_val = BUCKETS[new_status_name]
-                            supabase.table("vocab").update({"status": new_db_val}).eq("id", card['id']).execute()
+                            supabase.table("vocab").update({"status": BUCKETS[new_status_name]}).eq("id", card['id']).execute()
                             st.rerun()
-                                
+                            
         except Exception as e:
             st.error(f"Database error: {e}")

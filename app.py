@@ -15,15 +15,20 @@ st.title("⚽ Football Spanish Coach")
 # --- SIDEBAR: Live Scores & Schedule ---
 with st.sidebar:
     st.header("📅 Live Match Center")
-    # Example: Fetching English Premier League (League ID 4429)
+    
+    # Add a slider to let you control how many matches to see
+    num_matches = st.slider("Number of matches to display", 1, 20, 5)
+    
     url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsnextleague.php?id=4429"
     response = requests.get(url)
     
     if response.status_code == 200:
         data = response.json()
         if data['events']:
-            for event in data['events']
+            # Use the slider value here instead of a hardcoded number
+            for event in data['events'][:num_matches]:
                 st.write(f"**{event['strEvent']}**")
+                # ... rest of your code
                 st.caption(f"Date: {event['dateEvent']} | Time: {event['strTime']}")
                 
                 # Context button

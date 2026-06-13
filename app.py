@@ -121,7 +121,7 @@ with tab2:
                 events = random.choice(["referee controversy", "corner kick routines", "yellow card pressure", "stoppage time drama"])
                 
                 match_prompts = {
-                    "Player/Coach Names": f"Identify exactly 8 key players or managers for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Name (Team)', 'es': '1 short sentence in Spanish', 'en': 'English translation'}}].",
+                    "Player/Coach Names": f"Identify exactly 8 key players or managers for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. You MUST start the Spanish sentence with the person's exact name (e.g., 'Neymar es...'). Return ONLY JSON: [{{'topic': 'Name (Team)', 'es': '1 short sentence in Spanish starting with their name', 'en': 'English translation'}}].",
                     "Pre-Match Info": f"Provide exactly 8 short tactical points for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Fact', 'es': '1 short sentence in Spanish', 'en': 'English translation'}}].",
                     "In-Match Phrases": f"Provide exactly 8 distinct Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Context', 'es': '1 short sentence in Spanish', 'en': 'English translation'}}].",
                     "Tactical Analysis": f"Provide exactly 8 advanced tactical football terms relevant to {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Tactic', 'es': '1 short analytical sentence in Spanish', 'en': 'English translation'}}].",

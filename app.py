@@ -20,12 +20,24 @@ if st.button("Generate Phrases"):
     
     response = client.chat.completions.create(
         model="gpt-4o", 
-        messages=[{"role": "user", "content": prompt}]
+        messages=[
+            {"role": "system", "content": "You are a strict JSON generator. Return ONLY a JSON list of objects with 'es' and 'en' keys. Do not include any markdown formatting like ```json or conversational text."},
+            {"role": "user", "content": prompt}
+        ]
     )
     
-    new_phrases = json.loads(response.choices[0].message.content)
-    # Add new phrases to the top of the list
-    st.session_state.setdefault('phrases', []).extend(new_phrases)
+    content = response.choices[0].message.content.strip()
+    
+    # Handle potential markdown backticks that the AI might sneak in
+    if content.startswith("```"):
+        content = content.replace("```json", "").replace("```", "").strip()
+        
+    try:
+        new_phrases = json.loads(content)
+        st.session_state.setdefault('phrases', []).extend(new_phrases)
+    except json.JSONDecodeError:
+        st.error("The AI returned an invalid format. Please try again.")
+        st.write("Raw response:", content)
 
 # Display phrases
 if 'phrases' in st.session_state:

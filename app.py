@@ -5,7 +5,6 @@ from io import BytesIO
 import json
 import requests
 import random
-import datetime # <-- Add this to the top of your file with the other imports
 
 # 1. Setup Clients
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -16,13 +15,10 @@ st.title("⚽ Football Spanish Coach")
 
 # 2. Sidebar: Match Selection
 with st.sidebar:
-    st.header("📅 Today's Live Matches")
+    st.header("🏆 World Cup 2026 Matches")
     
-    # Get today's date dynamically
-    today = datetime.date.today().strftime("%Y-%m-%d")
-    
-    # Use the eventsday endpoint to pull everything happening today for Soccer
-    url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsday.php?d={today}&s=Soccer"
+    # Use the eventsseason endpoint to get the ENTIRE 2026 World Cup schedule (League ID 4429)
+    url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsseason.php?id=4429&s=2026"
     
     selected_event = None
     try:
@@ -31,11 +27,12 @@ with st.sidebar:
             data = response.json()
             if data and data.get('events'):
                 events = data['events']
-                event_options = {f"{e['strEvent']} ({e['dateEvent']})": e for e in events}
+                # Create options list and sort them chronologically just in case
+                event_options = {f"{e['strHomeTeam']} vs {e['strAwayTeam']} ({e['dateEvent']})": e for e in events}
                 selected_name = st.selectbox("Select a match (for Match-Specific Study):", options=list(event_options.keys()))
                 selected_event = event_options[selected_name]
             else:
-                st.write("No matches scheduled for today.")
+                st.write("No World Cup matches found for this season in the database.")
         else:
             st.error("Could not fetch match data.")
     except Exception as e:
@@ -127,15 +124,15 @@ if 'study_content' in st.session_state:
     
     for item in st.session_state['study_content']:
         with st.container(border=True):
-            # Make the topic/focus area smaller using a caption
+            # Smaller, subdued category title
             st.caption(f"{item.get('topic', '')}")
             
             col1, col2 = st.columns([4, 2])
             
-            # Make the Spanish text prominent using a markdown header
-            col1.markdown(f"### {item['es']}")
+            # Highlight the Spanish text in a prominent blue color
+            col1.markdown(f"### :blue[{item['es']}]")
             
-            # Remove "Meaning:" and just show the English translation in italics
+            # Simple italicized English translation (No "Meaning:" prefix)
             col1.write(f"*{item['en']}*")
             
             try:

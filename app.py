@@ -21,13 +21,20 @@ try:
 except Exception:
     db_connected = False
 
-# Replace your old get_flag function with this:
-def get_team_badge(match, side='home'):
-    # TheSportsDB returns the image URL directly in the match object
-    badge_url = match.get('strHomeBadge') if side == 'home' else match.get('strAwayBadge')
-    if badge_url:
-        return f'<img src="{badge_url}" width="25">'
-    return "⚽" # Fallback if no badge found
+def get_team_badge(team_name):
+    # This maps the team name to a reliable flag emoji or icon
+    # Since specific team badges are tricky, let's use a mapping dictionary
+    # or just use the country flag from a standard list.
+    flag_map = {
+        "USA": "🇺🇸", "Brazil": "🇧🇷", "Mexico": "🇲🇽", "South Africa": "🇿🇦",
+        "South Korea": "🇰🇷", "Czech Republic": "🇨🇿", "Canada": "🇨🇦",
+        "Paraguay": "🇵🇾", "Morocco": "🇲🇦", "Qatar": "🇶🇦", "Switzerland": "🇨🇭",
+        "Haiti": "🇭🇹", "Scotland": "🏴󠁧󠁢󠁳󠁣󠁴󠁿", "Germany": "🇩🇪", "Ivory Coast": "🇨🇮",
+        "Ecuador": "🇪🇨", "Australia": "🇦🇺", "Turkey": "🇹🇷", "Belgium": "🇧🇪",
+        "Egypt": "🇪🇬", "Saudi Arabia": "🇸🇦", "Uruguay": "🇺🇾", "Sweden": "🇸🇪",
+        "Tunisia": "🇹🇳", "Spain": "🇪🇸", "Portugal": "🇵🇹", "Italy": "🇮🇹"
+    }
+    return flag_map.get(team_name, "⚽")
 
 # Initialize session states
 if 'selected_event' not in st.session_state:
@@ -74,12 +81,16 @@ with st.sidebar:
                             home_display = f"![img]({home_badge})" if home_badge else "⚽"
                             away_display = f"![img]({away_badge})" if away_badge else "⚽"
                             
-                            match_name = f"{home_display} {match['strHomeTeam']} vs {match['strAwayTeam']} {away_display}"
+
+                            # In your loop
+                            home = match['strHomeTeam']
+                            away = match['strAwayTeam']
+                            match_name = f"{get_team_badge(home)} {home} vs {away} {get_team_badge(away)}"
                             
                             # Use st.markdown for the button label to render the image
                             if st.button(match_name, key=match['idEvent'], use_container_width=True):
                                 st.session_state['selected_event'] = match
-                                
+
             else:
                 st.write("No matches found.")
     except Exception as e:

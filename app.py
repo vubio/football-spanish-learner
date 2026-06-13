@@ -6,6 +6,7 @@ import json
 import requests
 import random
 from supabase import create_client, Client
+from datetime import datetime
 
 # 1. Setup Clients & DB
 st.set_page_config(page_title="Football Spanish Coach", layout="wide")
@@ -275,15 +276,16 @@ if st.session_state['study_content'] and st.session_state.get('current_mode'):
                 if db_connected:
                     if st.button("💾 Save", key=f"save_{i}_{item['es'][:10]}"):
                         try:
-                            supabase.table("vocab").insert({
-                                "topic": item.get("topic", "General"),
-                                "es": item["es"],
-                                "en": item["en"],
-                                "status": "to_learn"
-                            }).execute()
-                            st.toast("✅ Saved to Bank!")
-                        except Exception as e:
-                            st.error("Failed to save.")
+                                supabase.table("vocab").insert({
+                                    "topic": item.get("topic", "General"),
+                                    "es": item["es"],
+                                    "en": item["en"],
+                                    "status": "to_learn",
+                                    "created_at": datetime.now().strftime("%Y-%m-%d") # New!
+                                }).execute()
+                                st.toast("✅ Saved to Bank!")
+                            except Exception as e:
+                                st.error("Failed to save.")
 
 # --- TAB 4: My Vocab Bank ---
 BUCKETS = {

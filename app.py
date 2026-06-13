@@ -5,73 +5,71 @@ from io import BytesIO
 import json
 import requests
 
-# Initialize Clients
+# Setup
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 FOOTBALL_API_KEY = st.secrets["FOOTBALL_API_KEY"]
 
 st.set_page_config(page_title="Football Spanish Coach", layout="wide")
 st.title("⚽ Football Spanish Coach")
 
-# --- SIDEBAR: Live Scores & Schedule ---
+# --- 1. Fetch & Select Match ---
 with st.sidebar:
-    st.header("📅 Live Match Center")
-    
-    # Add a slider to let you control how many matches to see
-    num_matches = st.slider("Number of matches to display", 1, 20, 5)
-    
+    st.header("📅 Select Match")
+    # Fetching matches (using the FIFA World Cup ID 4429 as in your code)
     url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsnextleague.php?id=4429"
     response = requests.get(url)
     
-    if response.status_code == 200:
-        data = response.json()
-        if data['events']:
-            # Use the slider value here instead of a hardcoded number
-            for event in data['events'][:num_matches]:
-                st.write(f"**{event['strEvent']}**")
-                # ... rest of your code
-                st.caption(f"Date: {event['dateEvent']} | Time: {event['strTime']}")
-                
-                # Context button
-                if st.button(f"Get Context for {event['strHomeTeam']}", key=event['idEvent']):
-                    with st.spinner("Analyzing match context..."):
-                        prompt = f"Give me 3 short, interesting facts or linguistic notes for a football match between {event['strHomeTeam']} and {event['strAwayTeam']} to help me learn Spanish."
-                        context = client.chat.completions.create(
-                            model="gpt-4o", messages=[{"role": "user", "content": prompt}]
-                        ).choices[0].message.content
-                        st.info(context)
-        else:
-            st.write("No upcoming matches found.")
+    selected_event = None
+    if response.status_code == 200 and response.json().get('events'):
+        events = response.json()['events']
+        # Create a dictionary for the selectbox to show friendly names
+        event_options = {f"{e['strHomeTeam']} vs {e['strAwayTeam']} ({e['dateEvent']})": e for e in events}
+        selected_name = st.selectbox("Choose a match to study:", options=list(event_options.keys()))
+        selected_event = event_options[selected_name]
     else:
-        st.error("Could not fetch match data.")
+        st.write("No upcoming matches found.")
 
-# --- MAIN AREA: Language Learning ---
-st.header("Spanish Phrase Generator")
-scenario = st.selectbox("Match Scenario", ["General", "Goal Scored", "Referee Decision", "Player Action"])
-level = st.radio("Difficulty", ["Basic", "Advanced"], horizontal=True)
-
-if st.button("Generate Phrases"):
-    prompt = f"Give me 5 {level} Spanish sentences related to '{scenario}' in a football match. Return ONLY a JSON list of objects with 'es' and 'en' keys."
+# --- 2. Study Options (Dynamic UI) ---
+if selected_event:
+    st.subheader(f"Studying: {selected_event['strEvent']}")
     
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o", 
-            messages=[{"role": "system", "content": "You are a strict JSON generator."}, {"role": "user", "content": prompt}]
-        )
-        content = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
-        new_phrases = json.loads(content)
-        st.session_state.setdefault('phrases', []).extend(new_phrases)
-    except Exception as e:
-        st.error(f"Error generating phrases: {e}")
+    # Study mode selection
+    study_mode = st.radio(
+        "What would you like to focus on?",
+        ["Player/Coach Names", "Pre-Match Info", "In-Match Phrases"],
+        horizontal=True
+    )
+    
+    if st.button("Generate Study Content"):
+        with st.spinner("Generating content..."):
+            # Define prompts based on selection
+            prompts = {
+                "Player/Coach Names": f"List key players and coaches for {selected_event['strHomeTeam']} and {selected_event['strAwayTeam']}. Explain their roles.",
+                "Pre-Match Info": f"Provide background info, team situations, and common media talking points for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}.",
+                "In-Match Phrases": f"Provide 5 essential Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']} (e.g., scoring, corners). Return as JSON list of {{'es', 'en'}}."
+            }
+            
+            prompt = prompts[study_mode]
+            response = client.chat.completions.create(
+                model="gpt-4o", messages=[{"role": "user", "content": prompt}]
+            )
+            content = response.choices[0].message.content
+            
+            # Display logic
+            if study_mode == "In-Match Phrases":
+                # JSON parsing logic here (same as before)
+                st.session_state['phrases'] = json.loads(content.replace("```json", "").replace("```", ""))
+            else:
+                st.markdown(content)
 
-# Display phrases
+# --- 3. Persistent Phrase Display ---
 if 'phrases' in st.session_state:
+    st.divider()
+    st.header("Your Phrase List")
     for item in reversed(st.session_state['phrases']):
         with st.container(border=True):
             col1, col2 = st.columns([4, 1])
-            col1.write(f"**{item['es']}**")
-            col1.caption(f"Meaning: {item['en']}")
-            
-            # Simple Text-to-Speech
+            col1.write(f"**{item['es']}** — *{item['en']}*")
             tts = gTTS(text=item['es'], lang='es')
             fp = BytesIO()
             tts.write_to_fp(fp)

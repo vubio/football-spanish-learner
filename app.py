@@ -66,13 +66,20 @@ with st.sidebar:
                     for date in sorted(matches_by_date.keys()):
                         st.markdown(f"#### 📅 {date}")
                         for match in matches_by_date[date]:
-                            home = match['strHomeTeam']
-                            away = match['strAwayTeam']
-                            # Add flags to the button text!
-                            match_name = f"{get_team_badge(match, 'home')} {match['strHomeTeam']} vs {match['strAwayTeam']} {get_team_badge(match, 'away')}"
+                            # Try to find the team badges
+                            home_badge = match.get('strTeamBadge') # or 'strHomeBadge' depending on the API structure
+                            away_badge = match.get('strAwayBadge')
                             
+                            # Create the display string
+                            home_display = f"![img]({home_badge})" if home_badge else "⚽"
+                            away_display = f"![img]({away_badge})" if away_badge else "⚽"
+                            
+                            match_name = f"{home_display} {match['strHomeTeam']} vs {match['strAwayTeam']} {away_display}"
+                            
+                            # Use st.markdown for the button label to render the image
                             if st.button(match_name, key=match['idEvent'], use_container_width=True):
                                 st.session_state['selected_event'] = match
+                                
             else:
                 st.write("No matches found.")
     except Exception as e:

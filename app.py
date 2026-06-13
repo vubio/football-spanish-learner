@@ -6,9 +6,6 @@ import json
 import requests
 
 # 1. Setup Clients
-# Ensure you have set your secrets in Streamlit Cloud: 
-# OPENAI_API_KEY = "sk-..."
-# FOOTBALL_API_KEY = "123" 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 FOOTBALL_API_KEY = st.secrets["FOOTBALL_API_KEY"]
 
@@ -18,7 +15,7 @@ st.title("⚽ Football Spanish Coach")
 # 2. Sidebar: Match Selection
 with st.sidebar:
     st.header("📅 Select Match")
-    # Using 4429 (FIFA World Cup) as an example. Change ID for other leagues.
+    # Using 4429 (FIFA World Cup)
     url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsnextleague.php?id=4429"
     
     selected_event = None
@@ -48,45 +45,51 @@ if selected_event:
     )
     
     if st.button("Generate Study Content"):
-        with st.spinner("Generating content..."):
+        with st.spinner("Breaking content into bite-sized audio..."):
+            
+            # --- NEW PROMPT STRUCTURE: Everything is strict JSON now ---
             prompts = {
-                "Player/Coach Names": f"List key players and coaches for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Write a description for each IN SPANISH, followed by an English translation.",
-                "Pre-Match Info": f"Provide pre-match team situations and talking points for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Write the response IN SPANISH, then provide an English summary.",
-                "In-Match Phrases": f"Provide 5 essential Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'es': 'Spanish phrase', 'en': 'English meaning'}}]."
+                "Player/Coach Names": f"Identify 4 key figures (players/coaches) for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Name & Team', 'es': 'Short description in Spanish', 'en': 'English translation'}}].",
+                "Pre-Match Info": f"Provide 4 key talking points or tactical situations for {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Short Title', 'es': 'Spanish description', 'en': 'English translation'}}].",
+                "In-Match Phrases": f"Provide 5 essential Spanish phrases for watching {selected_event['strHomeTeam']} vs {selected_event['strAwayTeam']}. Return ONLY JSON: [{{'topic': 'Context', 'es': 'Spanish phrase', 'en': 'English meaning'}}]."
             }
             
-            response = client.chat.completions.create(
-                model="gpt-4o", messages=[{"role": "user", "content": prompts[study_mode]}]
-            )
-            content = response.choices[0].message.content
-            
-            if study_mode == "In-Match Phrases":
-                # Clean JSON string
-                content = content.replace("```json", "").replace("```", "").strip()
-                st.session_state['phrases'] = json.loads(content)
-            else:
-                st.markdown(content)
+            try:
+                response = client.chat.completions.create(
+                    model="gpt-4o", 
+                    messages=[
+                        {"role": "system", "content": "You are a strict JSON generator. Do not include markdown formatting."},
+                        {"role": "user", "content": prompts[study_mode]}
+                    ]
+                )
+                content = response.choices[0].message.content.replace("```json", "").replace("```", "").strip()
                 
-                # --- NEW: Add a single audio player for the long text blocks ---
-                tts = gTTS(text=content, lang='es')
-                fp = BytesIO()
-                tts.write_to_fp(fp)
-                fp.seek(0)
-                st.audio(fp, format="audio/mp3")
+                # Store the content and the mode title in session state
+                st.session_state['study_content'] = json.loads(content)
+                st.session_state['current_mode'] = study_mode
+                
+            except Exception as e:
+                st.error(f"Error generating content: {e}. Try clicking generate again.")
 
-# 4. Phrase/Audio Display
-if 'phrases' in st.session_state:
+# 4. Universal Flashcard & Audio Display
+if 'study_content' in st.session_state:
     st.divider()
-    st.header("Spanish Phrase Cheat Sheet")
-    for item in reversed(st.session_state['phrases']):
+    st.header(f"Study Cards: {st.session_state.get('current_mode', '')}")
+    
+    # Render everything uniformly as bite-sized cards
+    for item in st.session_state['study_content']:
         with st.container(border=True):
+            st.subheader(item.get('topic', ''))
             col1, col2 = st.columns([4, 1])
             col1.write(f"**{item['es']}**")
             col1.caption(f"Meaning: {item['en']}")
             
-            # --- AUDIO FIX ---
-            tts = gTTS(text=item['es'], lang='es')
-            fp = BytesIO()
-            tts.write_to_fp(fp)
-            fp.seek(0) # Rewind to start
-            col2.audio(fp, format="audio/mp3")
+            # Short, dedicated audio for ONLY the Spanish text
+            try:
+                tts = gTTS(text=item['es'], lang='es')
+                fp = BytesIO()
+                tts.write_to_fp(fp)
+                fp.seek(0) 
+                col2.audio(fp, format="audio/mp3")
+            except Exception as e:
+                col2.error("Audio error")

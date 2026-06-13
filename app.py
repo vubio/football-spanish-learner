@@ -13,30 +13,59 @@ FOOTBALL_API_KEY = st.secrets["FOOTBALL_API_KEY"]
 st.set_page_config(page_title="Football Spanish Coach", layout="wide")
 st.title("⚽ Football Spanish Coach")
 
-# 2. Sidebar: Match Selection
+# Initialize session state for the selected match
+if 'selected_event' not in st.session_state:
+    st.session_state['selected_event'] = None
+
+# 2. Sidebar: Match Selection (Scrollable & Grouped)
 with st.sidebar:
     st.header("🏆 World Cup 2026 Matches")
     
-    # Use the eventsseason endpoint to get the ENTIRE 2026 World Cup schedule (League ID 4429)
     url = f"https://www.thesportsdb.com/api/v1/json/{FOOTBALL_API_KEY}/eventsseason.php?id=4429&s=2026"
     
-    selected_event = None
     try:
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
             if data and data.get('events'):
                 events = data['events']
-                # Create options list and sort them chronologically just in case
-                event_options = {f"{e['strHomeTeam']} vs {e['strAwayTeam']} ({e['dateEvent']})": e for e in events}
-                selected_name = st.selectbox("Select a match (for Match-Specific Study):", options=list(event_options.keys()))
-                selected_event = event_options[selected_name]
+                
+                # Active Selection Display
+                if st.session_state['selected_event']:
+                    st.success(f"**Active:** {st.session_state['selected_event']['strEvent']}")
+                else:
+                    st.info("Select a match below to unlock match-specific study.")
+                
+                # Group matches by date
+                matches_by_date = {}
+                for e in events:
+                    date = e['dateEvent']
+                    if date not in matches_by_date:
+                        matches_by_date[date] = []
+                    matches_by_date[date].append(e)
+                
+                st.divider()
+                
+                # Create a scrollable container of 600 pixels height
+                with st.container(height=600, border=False):
+                    for date in sorted(matches_by_date.keys()):
+                        st.markdown(f"#### 📅 {date}")
+                        for match in matches_by_date[date]:
+                            match_name = f"{match['strHomeTeam']} vs {match['strAwayTeam']}"
+                            
+                            # Use buttons for each match that stretch full width
+                            if st.button(match_name, key=match['idEvent'], use_container_width=True):
+                                st.session_state['selected_event'] = match
+                                
             else:
                 st.write("No World Cup matches found for this season in the database.")
         else:
             st.error("Could not fetch match data.")
     except Exception as e:
         st.error(f"API Error: {e}")
+
+# Assign the session state to the variable used by the rest of the app
+selected_event = st.session_state['selected_event']
 
 # 3. Main Area: Tabs for General vs Match-Specific
 tab1, tab2 = st.tabs(["🌎 General Football Spanish", "⚔️ Match-Specific Study"])
@@ -124,15 +153,11 @@ if 'study_content' in st.session_state:
     
     for item in st.session_state['study_content']:
         with st.container(border=True):
-            # Smaller, subdued category title
             st.caption(f"{item.get('topic', '')}")
             
             col1, col2 = st.columns([4, 2])
             
-            # Highlight the Spanish text in a prominent blue color
             col1.markdown(f"### :blue[{item['es']}]")
-            
-            # Simple italicized English translation (No "Meaning:" prefix)
             col1.write(f"*{item['en']}*")
             
             try:
